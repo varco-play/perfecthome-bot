@@ -1,0 +1,18 @@
+{
+  "name": "telegram-lead-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for collecting customer inquiries for a store (lead form bot).",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "telegraf": "^4.16.3"
+  }
+}
