@@ -328,13 +328,53 @@ const server = http.createServer(async (req, res) => {
 // Explicitly register the webhook with Telegram before launching
 async function registerWebhook() {
   const webhookUrl = `${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`;
-  try {
-    await bot.telegram.setWebhook(webhookUrl);
-    console.log(`Webhook successfully set to: ${webhookUrl}`);
-  } catch (err) {
-    console.error('Failed to set webhook:', err);
-    process.exit(1);
+  const MAX_RETRIES = 5;
+  let attempt = 0;
+  let delay = 2000; // start with 2 seconds
+
+  while (attempt < MAX_RETRIES) {
+    try {
+      await bot.telegram.setWebhook(webhookUrl);
+      console.log(`Webhook successfully set to: ${webhookUrl}`);
+      return;
+    } catch (err) {
+      attempt++;
+
+      const is429 =
+        err.code === 429 ||
+        (err.response && err.response.error_code === 429) ||
+        (err.message && err.message.includes('429'));
+
+      if (is429) {
+        // Prefer Telegram's retry_after value when available
+        const retryAfterSec =
+          (err.response &&
+            err.response.parameters &&
+            err.response.parameters.retry_after) ||
+          null;
+        const waitMs = retryAfterSec ? retryAfterSec * 1000 : delay;
+
+        console.warn(
+          `Telegram rate limit hit (429). Attempt ${attempt}/${MAX_RETRIES}. ` +
+            `Waiting ${waitMs / 1000}s before retrying...`
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+
+        // Exponential backoff for the next fallback delay
+        delay = Math.min(delay * 2, 60000);
+      } else {
+        // Non-429 error — no point retrying
+        console.error('Failed to set webhook (non-retryable error):', err);
+        process.exit(1);
+      }
+    }
   }
+
+  console.error(
+    `Failed to set webhook after ${MAX_RETRIES} attempts. Giving up.`
+  );
+  process.exit(1);
 }
 
 // Launch bot in webhook mode
