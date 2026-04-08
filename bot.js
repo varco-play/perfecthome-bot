@@ -270,93 +270,16 @@ bot.catch((err, ctx) => {
   console.error(`Bot error for update ${ctx.updateType}:`, err);
 });
 
-// Webhook server
-const http = require('http');
-
-const PORT = process.env.PORT || 3000;
-const WEBHOOK_DOMAIN = process.env.WEBHOOK_DOMAIN;
-const WEBHOOK_PATH = '/webhook';
-
-if (!WEBHOOK_DOMAIN) {
-  console.error('WEBHOOK_DOMAIN is not set in environment variables');
-  process.exit(1);
-}
-
-const server = http.createServer(async (req, res) => {
-  // Health check
-  if (req.method === 'GET' && req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
-    return;
-  }
-
-  // Webhook endpoint
-  if (req.method === 'POST' && req.url === WEBHOOK_PATH) {
-    let body = '';
-
-    req.on('data', (chunk) => {
-      body += chunk.toString();
-    });
-
-    req.on('end', async () => {
-      try {
-        const update = JSON.parse(body);
-        await bot.handleUpdate(update);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err) {
-        console.error('Failed to handle update:', err);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: false }));
-      }
-    });
-
-    req.on('error', (err) => {
-      console.error('Request error:', err);
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: false }));
-    });
-
-    return;
-  }
-
-  // 404 for everything else
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found' }));
-});
-
-// Explicitly register the webhook with Telegram before launching
-async function registerWebhook() {
-  const webhookUrl = `${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`;
-  try {
-    await bot.telegram.setWebhook(webhookUrl);
-    console.log(`Webhook successfully set to: ${webhookUrl}`);
-  } catch (err) {
-    console.error('Failed to set webhook:', err);
+// Launch bot in polling mode
+bot
+  .launch()
+  .then(() => {
+    console.log('Telegram lead bot is running (polling mode)');
+  })
+  .catch((err) => {
+    console.error('Failed to launch bot:', err);
     process.exit(1);
-  }
-}
-
-// Launch bot in webhook mode
-registerWebhook().then(() => {
-  bot
-    .launch({
-      webhook: {
-        domain: WEBHOOK_DOMAIN,
-        port: PORT,
-        path: WEBHOOK_PATH,
-        cb: server,
-      },
-    })
-    .then(() => {
-      console.log(`Telegram lead bot is running in webhook mode on port ${PORT}`);
-      console.log(`Webhook active at ${WEBHOOK_DOMAIN}${WEBHOOK_PATH}`);
-    })
-    .catch((err) => {
-      console.error('Failed to launch bot:', err);
-      process.exit(1);
-    });
-});
+  });
 
 // Crash protection
 process.on('unhandledRejection', (err) => {
